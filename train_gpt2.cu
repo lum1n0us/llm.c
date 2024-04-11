@@ -13,19 +13,19 @@ the layernorms are connected to the residuals so we += in layernorm backward.
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
+#ifdef _WIN32
+#define _USE_MATH_DEFINES
+#endif
 #include <math.h>
-#include <time.h>
-#include <assert.h>
-#include <float.h>
 #include <string.h>
-#include <unistd.h>
 #include <assert.h>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <cublasLt.h>
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+
+#include "platform_utils.h"
 
 // ----------------------------------------------------------------------------
 // CUDA utils
@@ -2028,19 +2028,16 @@ int main(int argc, char *argv[]) {
         if (last_step) { break; }
 
         // do a training step
-        clock_gettime(CLOCK_MONOTONIC, &start);
+        const double start_time_ms = get_time_ms();
         dataloader_next_batch(&train_loader);
         gpt2_forward(&model, train_loader.inputs, train_loader.targets, B, T);
         gpt2_zero_grad(&model);
         gpt2_backward(&model);
         gpt2_update(&model, learning_rate, 0.9f, 0.999f, 1e-8f, 0.0f, step+1);
         cudaCheck(cudaDeviceSynchronize()); // finish all CUDA work to get correct precise timings
-        clock_gettime(CLOCK_MONOTONIC, &end);
-        double time_elapsed_s = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-        total_sum_iteration_time_s += time_elapsed_s;
-        int tokens_per_second = (B * T) / time_elapsed_s;
-        printf("step %4d/%d: train loss %f (%f ms, %d tok/s)\n", step + 1, train_num_batches, model.mean_loss, time_elapsed_s * 1000, tokens_per_second);
-        logger_log_train(&logger, step, model.mean_loss);
+        const double end_time_ms = get_time_ms();
+        const double time_elapsed_ms = end_time_ms - start_time_ms;
+        printf("step %d: train loss %f (took %f ms)\n", step, model.mean_loss, time_elapsed_ms);
     }
     // add a total average, for optimizations that are only mild improvements
     printf("total average iteration time: %f ms\n", total_sum_iteration_time_s / train_num_batches * 1000);

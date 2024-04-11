@@ -10,16 +10,21 @@ There will be other versions of this code that specialize it and make it fast.
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
-#include <stdint.h>
-#include <assert.h>
+#ifdef _WIN32
+#define _USE_MATH_DEFINES
+#endif
 #include <math.h>
 #include <time.h>
 #include <string.h>
-#include <unistd.h>
-#ifdef OMP
+#if defined(OMP) && !(_OPENMP < 202011)
 #include <omp.h>
+#define OMP_ENABLED
+#else
+#pragma message \
+    "The installed OpenMP version is less than 5.2, you may need update to the latest standard to enable to OpenMP directives"
 #endif
+
+#include "platform_utils.h"
 
 // ----------------------------------------------------------------------------
 // all the individual layers' forward and backward passes
@@ -160,7 +165,9 @@ void matmul_forward(float* out,
     // OC is short for "output channels"
     // inp is (B,T,C), weight is (OC, C), bias is (OC)
     // out will be (B,T,OC)
+#ifdef OMP_ENABLED
     #pragma omp parallel for collapse(2)
+#endif
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             float* out_bt = out + b * T * OC + t * OC;
@@ -185,7 +192,9 @@ void matmul_backward(float* dinp, float* dweight, float* dbias,
     // but that doesn't afford an efficient parallelization strategy
 
     // backward into inp first, parallelize over B,T
+#ifdef OMP_ENABLED
     #pragma omp parallel for collapse(2)
+#endif
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             float* dout_bt = dout + b * T * OC + t * OC;
@@ -200,7 +209,9 @@ void matmul_backward(float* dinp, float* dweight, float* dbias,
         }
     }
     // backward into weight/bias, parallelize over output channels OC
+#ifdef OMP_ENABLED
     #pragma omp parallel for
+#endif
     for (int o = 0; o < OC; o++) {
         for (int b = 0; b < B; b++) {
             for (int t = 0; t < T; t++) {
@@ -231,7 +242,9 @@ void attention_forward(float* out, float* preatt, float* att,
     int hs = C / NH; // head size
     float scale = 1.0 / sqrtf(hs);
 
+#ifdef OMP_ENABLED
     #pragma omp parallel for collapse(3)
+#endif
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             for (int h = 0; h < NH; h++) {
@@ -396,7 +409,9 @@ void residual_backward(float* dinp1, float* dinp2, float* dout, int N) {
 void softmax_forward(float* probs, float* logits, int B, int T, int V) {
     // output: probs are (B,T,V) of the probabilities (sums to 1.0 in each b,t position)
     // input: logits is (B,T,V) of the unnormalized log probabilities
+#ifdef OMP_ENABLED
     #pragma omp parallel for collapse(2)
+#endif
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             // probs <- softmax(logits)
@@ -1142,6 +1157,10 @@ void tokenizer_free(Tokenizer *tokenizer) {
 
 // ----------------------------------------------------------------------------
 // main training loop
+
+// during inference step we'll generate sequences of this many tokens
+#define GEN_MAX_LENGTH 64
+
 int main() {
 
     // build the GPT-2 model from a checkpoint
@@ -1227,15 +1246,15 @@ int main() {
         }
 
         // do a training step
-        clock_gettime(CLOCK_MONOTONIC, &start);
+        const double start_time_ms = get_time_ms();
         dataloader_next_batch(&train_loader);
         gpt2_forward(&model, train_loader.inputs, train_loader.targets, B, T);
         gpt2_zero_grad(&model);
         gpt2_backward(&model);
         gpt2_update(&model, 1e-4f, 0.9f, 0.999f, 1e-8f, 0.0f, step+1);
-        clock_gettime(CLOCK_MONOTONIC, &end);
-        double time_elapsed_s = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-        printf("step %d: train loss %f (took %f ms)\n", step, model.mean_loss, time_elapsed_s * 1000);
+        const double end_time_ms = get_time_ms();
+        const double time_elapsed_ms = end_time_ms - start_time_ms;
+        printf("step %d: train loss %f (took %f ms)\n", step, model.mean_loss, time_elapsed_ms);
     }
 
     // free
