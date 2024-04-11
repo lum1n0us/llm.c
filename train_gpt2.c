@@ -13,9 +13,12 @@ There will be other versions of this code that specialize it and make it fast.
 #ifdef _WIN32
 #define _USE_MATH_DEFINES
 #endif
+#include <ctype.h>
+#include <stdint.h>
+#include <assert.h>
 #include <math.h>
-#include <time.h>
 #include <string.h>
+#include <unistd.h>
 #if defined(OMP) && !(_OPENMP < 202011)
 #include <omp.h>
 #define OMP_ENABLED
