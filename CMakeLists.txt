@@ -37,7 +37,7 @@ else()
     list(APPEND GPT2_TRAIN_SOURCES train_gpt2.c)
     list(APPEND GPT2_TEST_SOURCES test_gpt2.c)
 
-    find_package(OpenMP)
+    find_package(OpenMP 5.2)
     if(OpenMP_C_FOUND)
         list(APPEND GPT2_LIB_DEPENDENCIES OpenMP::OpenMP_C)
         list(APPEND GPT2_TRAIN_DEFINES OMP)

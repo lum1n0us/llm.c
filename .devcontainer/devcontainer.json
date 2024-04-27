@@ -1,0 +1,10 @@
+{
+    "name": "llm.c dev",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "args": {
+            "WASI_SDK_VER": "wasi-sdk-22"
+        }
+    },
+    "remoteUser": "vscode"
+}

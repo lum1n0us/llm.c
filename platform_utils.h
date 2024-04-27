@@ -4,7 +4,7 @@
 // ----------------------------------------------------------------------------
 // platform-specific utilities
 
-#if defined(__unix__)
+#if defined(__unix__) || defined(__wasi__)
 #include <unistd.h>
 #include <time.h>
 
@@ -31,7 +31,7 @@ double get_time_ms() {
 
 int file_exists(const char* filename) {
     DWORD dwAttrib = GetFileAttributes(filename);
-    if (dwAttrib != INVALID_FILE_ATTRIBUTES && 
+    if (dwAttrib != INVALID_FILE_ATTRIBUTES &&
         !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY)) {
         return 1;
     }
